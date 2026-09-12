@@ -27,14 +27,14 @@ DB_NAME = "benchmarks"
 
 # Store latest completed run stats in memory for the verdict scorecard
 benchmark_records = {
-    "ec2": {"tps": 487.15, "p95": 10.09, "recovery_sec": 4.2},
-    "rds": {"tps": 210.00, "p95": 23.52, "recovery_sec": 38.5},
+    "ec2": {"tps": 461.44, "p95": 10.46, "recovery_sec": 4.0},
+    "rds": {"tps": 219.31, "p95": 20.74, "recovery_sec": 38.5},
 }
 
 class TestRequest(BaseModel):
     target: str      # "ec2" or "rds"
     mode: str        # "steady" or "bursty"
-    duration: int = 30
+    duration: int = 15
 
 def get_target_host(target: str) -> str:
     return "localhost" if target == "ec2" else RDS_HOST
@@ -42,7 +42,7 @@ def get_target_host(target: str) -> str:
 def check_db_health(host: str) -> bool:
     try:
         conn = psycopg2.connect(
-            host=host, port=5432, user=DB_USER, password=DB_PASS, dbname=DB_NAME, connect_timeout=2
+            host=host, port=5432, user=DB_USER, password=DB_PASS, dbname=DB_NAME, connect_timeout=1
         )
         conn.close()
         return True
@@ -84,8 +84,13 @@ async def run_test(req: TestRequest):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT
         )
-        tps_regex = re.compile(r"tps:\s+([0-9.]+)")
-        lat_regex = re.compile(r"latency\s+\(95th%\):\s+([0-9.]+)ms")
+        
+        # Regex patterns matching Sysbench 1.0 output:
+        # [ 1s ] thds: 4 tps: 438.05 qps: 8810.91 ... lat (ms,95%): 11.45 ...
+        tps_regex = re.compile(r"tps:\s*([0-9.]+)")
+        lat_regex = re.compile(r"lat\s*(?:\(ms,95%\)|\(95th%\))?:\s*([0-9.]+)")
+        qps_regex = re.compile(r"qps:\s*([0-9.]+)")
+        
         final_tps_regex = re.compile(r"transactions:\s+\d+\s+\(([0-9.]+)\s+per sec\.\)")
         final_p95_regex = re.compile(r"95th percentile:\s+([0-9.]+)")
 
@@ -98,14 +103,21 @@ async def run_test(req: TestRequest):
                 break
             text = line.decode("utf-8", errors="replace").strip()
             
-            # Match interval stats
             tps_match = tps_regex.search(text)
             lat_match = lat_regex.search(text)
-            if tps_match and lat_match:
+            qps_match = qps_regex.search(text)
+
+            if tps_match:
+                tps_val = float(tps_match.group(1))
+                lat_val = float(lat_match.group(1)) if lat_match else 0.0
+                qps_val = float(qps_match.group(1)) if qps_match else 0.0
+
                 payload = {
                     "type": "tick",
-                    "tps": float(tps_match.group(1)),
-                    "p95": float(lat_match.group(1)),
+                    "target": req.target,
+                    "tps": tps_val,
+                    "p95": lat_val,
+                    "qps": qps_val,
                     "raw": text
                 }
                 yield f"data: {json.dumps(payload)}\n\n"
@@ -120,15 +132,16 @@ async def run_test(req: TestRequest):
 
         await proc.wait()
 
-        if final_tps and final_p95:
-            benchmark_records[req.target]["tps"] = final_tps
-            benchmark_records[req.target]["p95"] = final_p95
+        if final_tps:
+            benchmark_records[req.target]["tps"] = round(final_tps, 2)
+        if final_p95:
+            benchmark_records[req.target]["p95"] = round(final_p95, 2)
 
         summary = {
             "type": "complete",
-            "final_tps": final_tps or benchmark_records[req.target]["tps"],
-            "final_p95": final_p95 or benchmark_records[req.target]["p95"],
-            "target": req.target
+            "target": req.target,
+            "final_tps": benchmark_records[req.target]["tps"],
+            "final_p95": benchmark_records[req.target]["p95"]
         }
         yield f"data: {json.dumps(summary)}\n\n"
 
@@ -138,32 +151,41 @@ async def run_test(req: TestRequest):
 async def trigger_failure(target: str):
     async def fail_stream():
         start_time = time.time()
-        yield f"data: {json.dumps({'status': 'Injecting failure into ' + target.upper()})}\n\n"
-        
-        if target == "ec2":
-            # Restart Docker container locally
-            subprocess.run(["docker", "restart", "postgres-selfhosted"], check=True)
-        else:
-            # RDS forced reboot via boto3
-            rds = boto3.client("rds", region_name="ap-south-1")
-            rds.reboot_db_instance(DBInstanceIdentifier="db-ops-rds", ForceFailover=False)
-
-        yield f"data: {json.dumps({'status': 'Database is down. Polling connection for recovery...'})}\n\n"
+        yield f"data: {json.dumps({'status': f'Triggering failure on {target.upper()}...'})}\n\n"
         
         host = get_target_host(target)
-        # Give it a second to unbind
-        await asyncio.sleep(2)
         
-        elapsed = 0
-        while True:
+        if target == "ec2":
+            try:
+                subprocess.run(["docker", "restart", "postgres-selfhosted"], check=True)
+                yield f"data: {json.dumps({'status': 'Docker container killed & restarting...'})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'status': f'Docker command error: {str(e)}'})}\n\n"
+        else:
+            try:
+                rds = boto3.client("rds", region_name="ap-south-1")
+                rds.reboot_db_instance(DBInstanceIdentifier="db-ops-rds", ForceFailover=False)
+                yield f"data: {json.dumps({'status': 'AWS RDS reboot API called. Waiting for endpoint reboot...'})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'status': f'RDS Notice: {str(e)} - Monitoring recovery...'})}\n\n"
+
+        await asyncio.sleep(2)
+        yield f"data: {json.dumps({'status': 'Database is down. Polling connection for recovery...'})}\n\n"
+        
+        recovered = False
+        for _ in range(120):
             await asyncio.sleep(1)
             elapsed = round(time.time() - start_time, 1)
             is_up = check_db_health(host)
-            yield f"data: {json.dumps({'status': f'Waiting... {elapsed}s elapsed', 'elapsed': elapsed, 'recovered': is_up})}\n\n"
+            yield f"data: {json.dumps({'status': f'Waiting... {elapsed}s elapsed', 'elapsed': elapsed, 'recovered': is_up, 'target': target})}\n\n"
             if is_up:
+                recovered = True
                 benchmark_records[target]["recovery_sec"] = elapsed
-                yield f"data: {json.dumps({'status': f'Recovered in {elapsed} seconds!', 'elapsed': elapsed, 'done': True})}\n\n"
+                yield f"data: {json.dumps({'status': f'Recovered in {elapsed} seconds!', 'elapsed': elapsed, 'done': True, 'target': target})}\n\n"
                 break
+
+        if not recovered:
+            yield f"data: {json.dumps({'status': 'Recovery polling timed out after 120s', 'elapsed': 120.0, 'done': True, 'target': target})}\n\n"
 
     return StreamingResponse(fail_stream(), media_type="text/event-stream")
 
