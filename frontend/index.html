@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DB Ops Advisor - Cloud Database Benchmarker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --navy: #238636;
+      --blue: #58a6ff;
+      --purple: #bc8cff;
+      --amber: #d29922;
+      --red: #f85149;
+      --green: #3fb950;
+      --terminal-bg: #090d13;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      background: #010409;
+      border-bottom: 1px solid var(--border);
+      padding: 24px 36px;
+    }
+    header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #f0f6fc;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header p {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+    nav {
+      display: flex;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 36px;
+    }
+    nav button {
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      padding: 16px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    nav button:hover { color: #f0f6fc; }
+    nav button.active {
+      color: var(--blue);
+      border-bottom-color: var(--blue);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .card h3 {
+      font-size: 16px;
+      color: #f0f6fc;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 12px 0 6px;
+    }
+    select, input[type="number"], input[type="range"] {
+      width: 100%;
+      padding: 8px 12px;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: #f0f6fc;
+      font-size: 14px;
+      outline: none;
+    }
+    select:focus, input:focus { border-color: var(--blue); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      margin-top: 18px;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+    .btn-primary { background: #238636; color: #fff; border-color: rgba(240, 246, 252, 0.1); }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-danger { background: #da3633; color: #fff; border-color: rgba(240, 246, 252, 0.1); }
+    .btn-danger:hover { background: #f85149; }
+    .btn-warning { background: #bf8700; color: #fff; border-color: rgba(240, 246, 252, 0.1); }
+    .btn-warning:hover { background: #d29922; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .stat-row {
+      display: flex;
+      gap: 16px;
+      margin-top: 10px;
+    }
+    .stat-box {
+      flex: 1;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-val {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--blue);
+      margin-bottom: 4px;
+    }
+    .stat-lbl {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .terminal {
+      background: var(--terminal-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 12px;
+      color: #7ee787;
+      height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      margin-top: 16px;
+    }
+    .terminal-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      background: #0d1117;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-ec2 { background: rgba(88, 166, 255, 0.2); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-rds { background: rgba(188, 140, 255, 0.2); color: var(--purple); border: 1px solid var(--purple); }
+    .badge-tie { background: rgba(210, 153, 34, 0.2); color: var(--amber); border: 1px solid var(--amber); }
+    .slider-container {
+      margin-bottom: 16px;
+    }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .slider-val { font-weight: 600; color: var(--blue); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📊 DB Ops Advisor</h1>
+  <p>Managed vs Self-Hosted PostgreSQL — Tail-Latency, Recovery Time & Cost of Ownership Live Benchmark Engine</p>
+</header>
+
+<nav>
+  <button class="active" onclick="switchTab('run')">Run Live Test</button>
+  <button onclick="switchTab('fail')">Failure Simulator</button>
+  <button onclick="switchTab('verdict')">Verdict Dashboard</button>
+  <button onclick="switchTab('cost')">Cost Advisor</button>
+</nav>
+
+<div class="container">
+
+  <!-- TAB 1: RUN TEST -->
+  <div id="run" class="tab-content active">
+    <div class="grid">
+      <div class="card">
+        <h3>⚙️ Benchmark Configuration</h3>
+        <label for="run-target">Target Database</label>
+        <select id="run-target">
+          <option value="ec2">Self-Hosted PostgreSQL (EC2 Docker)</option>
+          <option value="rds">AWS RDS Managed PostgreSQL</option>
+        </select>
+
+        <label for="run-mode">Workload Pattern</label>
+        <select id="run-mode">
+          <option value="steady">Steady Load (4 threads, unthrottled)</option>
+          <option value="bursty">Bursty Traffic (16 threads, 150 req/s rate limit)</option>
+        </select>
+
+        <label for="run-duration">Duration (seconds)</label>
+        <input type="number" id="run-duration" value="30" min="5" max="300">
+
+        <button class="btn btn-primary" id="btn-start-test" onclick="startBenchmark()">Start Benchmark</button>
+      </div>
+
+      <div class="card">
+        <h3>📈 Live Real-Time Telemetry</h3>
+        <div class="stat-row">
+          <div class="stat-box">
+            <div class="stat-val" id="telemetry-tps">—</div>
+            <div class="stat-lbl">TPS (Trans/sec)</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="telemetry-p95">—</div>
+            <div class="stat-lbl">p95 Latency (ms)</div>
+          </div>
+        </div>
+
+        <div class="terminal-title" style="margin-top:16px;">Sysbench Streaming Log</div>
+        <div class="terminal" id="run-logs">Terminal log output will stream here...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📊 Real-Time Throughput (TPS over time)</h3>
+      <canvas id="liveChart" style="max-height: 280px;"></canvas>
+    </div>
+  </div>
+
+  <!-- TAB 2: FAILURE SIMULATOR -->
+  <div id="fail" class="tab-content">
+    <div class="card" style="margin-bottom: 20px;">
+      <h3>⚡ Chaos & Downtime Recovery Engine</h3>
+      <p style="font-size:14px; color:var(--text-muted);">
+        Trigger an abrupt crash on either target. The engine continuously polls the database connection to measure exact downtime recovery in seconds.
+      </p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>🐳 Self-Hosted (EC2 Container)</h3>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom: 12px;">
+          Executes <code style="color:#7ee787;">docker restart postgres-selfhosted</code> and measures container restart & socket binding time.
+        </p>
+        <button class="btn btn-danger" id="btn-fail-ec2" onclick="triggerFail('ec2')">Kill & Restart EC2 Container</button>
+        <div class="stat-row" style="margin-top:16px;">
+          <div class="stat-box">
+            <div class="stat-val" id="fail-ec2-sec">—</div>
+            <div class="stat-lbl">Recovery Time (sec)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>☁️ Managed AWS RDS</h3>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom: 12px;">
+          Triggers an RDS reboot via AWS Boto3 API (<code style="color:#bc8cff;">reboot_db_instance</code>) and tracks DNS/endpoint availability.
+        </p>
+        <button class="btn btn-warning" id="btn-fail-rds" onclick="triggerFail('rds')">Reboot Managed RDS Instance</button>
+        <div class="stat-row" style="margin-top:16px;">
+          <div class="stat-box">
+            <div class="stat-val" id="fail-rds-sec">—</div>
+            <div class="stat-lbl">Recovery Time (sec)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="terminal-title">Failure Simulation Logs</div>
+      <div class="terminal" id="fail-logs">Failure simulation logs will stream here...</div>
+    </div>
+  </div>
+
+  <!-- TAB 3: VERDICT DASHBOARD -->
+  <div id="verdict" class="tab-content">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h3>🏆 Honest Multi-Dimensional Scorecard</h3>
+          <p style="font-size:14px; color:var(--text-muted);">Independent evaluation across 5 distinct axes based on active measurements.</p>
+        </div>
+        <button class="btn btn-primary" style="width:auto; margin-top:0;" onclick="loadVerdict()">Refresh Scorecard</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>EC2 (Self-Hosted Docker)</th>
+            <th>AWS RDS (Managed)</th>
+            <th>Honest Winner</th>
+          </tr>
+        </thead>
+        <tbody id="verdict-table-body">
+          <tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Loading scorecard...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 4: COST ADVISOR -->
+  <div id="cost" class="tab-content">
+    <div class="grid">
+      <div class="card">
+        <h3>💰 3-Year Total Cost of Ownership (TCO) Calculator</h3>
+
+        <div class="slider-container">
+          <div class="slider-header">
+            <span>Database Administrator Hourly Rate ($/hr):</span>
+            <span class="slider-val" id="lbl-dba-rate">$35</span>
+          </div>
+          <input type="range" id="dba-rate" min="10" max="150" value="35" oninput="updateCost()">
+        </div>
+
+        <div class="slider-container">
+          <div class="slider-header">
+            <span>EC2 DBA Hours / Month (Patching, Backups, Monitoring):</span>
+            <span class="slider-val" id="lbl-ec2-hours">10 hrs</span>
+          </div>
+          <input type="range" id="ec2-hours" min="1" max="40" value="10" oninput="updateCost()">
+        </div>
+
+        <div class="slider-container">
+          <div class="slider-header">
+            <span>RDS DBA Hours / Month (Schema, Scaling oversight):</span>
+            <span class="slider-val" id="lbl-rds-hours">2 hrs</span>
+          </div>
+          <input type="range" id="rds-hours" min="0" max="10" value="2" oninput="updateCost()">
+        </div>
+
+        <div class="slider-container">
+          <div class="slider-header">
+            <span>Monthly Compute & Storage: EC2 ($/mo):</span>
+            <span class="slider-val" id="lbl-ec2-infra">$15</span>
+          </div>
+          <input type="range" id="ec2-infra" min="5" max="100" value="15" oninput="updateCost()">
+        </div>
+
+        <div class="slider-container">
+          <div class="slider-header">
+            <span>Monthly Managed Service: RDS ($/mo):</span>
+            <span class="slider-val" id="lbl-rds-infra">$28</span>
+          </div>
+          <input type="range" id="rds-infra" min="15" max="200" value="28" oninput="updateCost()">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📊 3-Year Cumulative TCO Breakdown</h3>
+        <div class="stat-row">
+          <div class="stat-box">
+            <div class="stat-val" id="tco-ec2-total" style="color:var(--blue);">$0</div>
+            <div class="stat-lbl">EC2 3-Year TCO</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="tco-rds-total" style="color:var(--purple);">$0</div>
+            <div class="stat-lbl">RDS 3-Year TCO</div>
+          </div>
+        </div>
+        <div id="tco-verdict-summary" style="margin: 14px 0; font-size:14px; font-weight:600; text-align:center;"></div>
+        <canvas id="tcoChart" style="max-height: 220px;"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let liveChart = null;
+  let tcoChart = null;
+
+  function switchTab(id) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.target.classList.add('active');
+
+    if (id === 'verdict') loadVerdict();
+    if (id === 'cost') updateCost();
+  }
+
+  // --- TAB 1: RUN BENCHMARK SSE ---
+  function initLiveChart() {
+    const ctx = document.getElementById('liveChart').getContext('2d');
+    if (liveChart) liveChart.destroy();
+    liveChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Transactions / sec (TPS)',
+          data: [],
+          borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88, 166, 255, 0.1)',
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { grid: { color: '#21262d' }, ticks: { color: '#8b949e' } },
+          y: { grid: { color: '#21262d' }, ticks: { color: '#8b949e' }, beginAtZero: true }
+        },
+        plugins: { legend: { labels: { color: '#c9d1d9' } } }
+      }
+    });
+  }
+
+  async function startBenchmark() {
+    const target = document.getElementById('run-target').value;
+    const mode = document.getElementById('run-mode').value;
+    const duration = parseInt(document.getElementById('run-duration').value, 10) || 30;
+    const btn = document.getElementById('btn-start-test');
+    const logs = document.getElementById('run-logs');
+
+    btn.disabled = true;
+    logs.textContent = `[INIT] Starting ${mode} benchmark on ${target.toUpperCase()} for ${duration}s...\n`;
+    initLiveChart();
+
+    let sec = 0;
+    try {
+      const response = await fetch('/api/run-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target, mode, duration })
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              if (data.type === 'tick') {
+                sec++;
+                document.getElementById('telemetry-tps').textContent = data.tps.toFixed(1);
+                document.getElementById('telemetry-p95').textContent = data.p95.toFixed(2);
+                logs.textContent += `[TICK] ${data.raw}\n`;
+                logs.scrollTop = logs.scrollHeight;
+
+                liveChart.data.labels.push(`${sec}s`);
+                liveChart.data.datasets[0].data.push(data.tps);
+                liveChart.update();
+              } else if (data.type === 'complete') {
+                logs.textContent += `\n[COMPLETE] Target ${data.target.toUpperCase()} | Final TPS: ${data.final_tps} | p95: ${data.final_p95}ms\n`;
+                logs.scrollTop = logs.scrollHeight;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (err) {
+      logs.textContent += `[ERROR] Failed to run benchmark: ${err.message}\n`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // --- TAB 2: FAILURE SIMULATOR SSE ---
+  async function triggerFail(target) {
+    const btn = document.getElementById(target === 'ec2' ? 'btn-fail-ec2' : 'btn-fail-rds');
+    const logs = document.getElementById('fail-logs');
+    const timeVal = document.getElementById(target === 'ec2' ? 'fail-ec2-sec' : 'fail-rds-sec');
+
+    btn.disabled = true;
+    timeVal.textContent = '...';
+    logs.textContent = `[TRIGGER] Initiating chaos injection on ${target.toUpperCase()}...\n`;
+
+    try {
+      const response = await fetch(`/api/fail/${target}`, { method: 'POST' });
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              logs.textContent += `[POLL] ${data.status}\n`;
+              logs.scrollTop = logs.scrollHeight;
+
+              if (data.elapsed !== undefined) {
+                timeVal.textContent = `${data.elapsed}s`;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (err) {
+      logs.textContent += `[ERROR] Failure injection error: ${err.message}\n`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // --- TAB 3: VERDICT SCORECARD ---
+  async function loadVerdict() {
+    const tbody = document.getElementById('verdict-table-body');
+    try {
+      const res = await fetch('/api/verdict');
+      const rec = await res.json();
+      const ec2 = rec.ec2 || {};
+      const rds = rec.rds || {};
+
+      const tpsWinner = (ec2.tps || 0) >= (rds.tps || 0) ? 'EC2' : 'RDS';
+      const latWinner = (ec2.p95 || 999) <= (rds.p95 || 999) ? 'EC2' : 'RDS';
+      const recWinner = (ec2.recovery_sec || 999) <= (rds.recovery_sec || 999) ? 'EC2' : 'RDS';
+
+      tbody.innerHTML = `
+        <tr>
+          <td><strong>Peak Throughput</strong> (Transactions/sec)</td>
+          <td>${ec2.tps ? ec2.tps.toFixed(1) + ' TPS' : '—'}</td>
+          <td>${rds.tps ? rds.tps.toFixed(1) + ' TPS' : '—'}</td>
+          <td><span class="badge badge-${tpsWinner.toLowerCase()}">${tpsWinner} (Low overhead)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Tail Latency</strong> (95th percentile)</td>
+          <td>${ec2.p95 ? ec2.p95.toFixed(2) + ' ms' : '—'}</td>
+          <td>${rds.p95 ? rds.p95.toFixed(2) + ' ms' : '—'}</td>
+          <td><span class="badge badge-${latWinner.toLowerCase()}">${latWinner} (Lower is better)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Crash Recovery Time</strong> (Downtime)</td>
+          <td>${ec2.recovery_sec ? ec2.recovery_sec + ' s' : '—'}</td>
+          <td>${rds.recovery_sec ? rds.recovery_sec + ' s' : '—'}</td>
+          <td><span class="badge badge-${recWinner.toLowerCase()}">${recWinner} (Restart vs Cloud API)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Operational Maintenance</strong></td>
+          <td>Manual (OS, backups, Docker, patches)</td>
+          <td>Zero (Automated backups, HA failover)</td>
+          <td><span class="badge badge-rds">AWS RDS (Fully Managed)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Predictable Total Cost</strong></td>
+          <td>Fixed compute (High DBA labor risk)</td>
+          <td>Premium infra (Minimal DBA labor)</td>
+          <td><span class="badge badge-tie">Context Dependent</span></td>
+        </tr>
+      `;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:var(--red);">Failed to fetch verdict: ${err.message}</td></tr>`;
+    }
+  }
+
+  // --- TAB 4: COST ADVISOR ---
+  function updateCost() {
+    const dbaRate = parseInt(document.getElementById('dba-rate').value, 10);
+    const ec2Hours = parseInt(document.getElementById('ec2-hours').value, 10);
+    const rdsHours = parseInt(document.getElementById('rds-hours').value, 10);
+    const ec2Infra = parseInt(document.getElementById('ec2-infra').value, 10);
+    const rdsInfra = parseInt(document.getElementById('rds-infra').value, 10);
+
+    document.getElementById('lbl-dba-rate').textContent = `$${dbaRate}/hr`;
+    document.getElementById('lbl-ec2-hours').textContent = `${ec2Hours} hrs`;
+    document.getElementById('lbl-rds-hours').textContent = `${rdsHours} hrs`;
+    document.getElementById('lbl-ec2-infra').textContent = `$${ec2Infra}/mo`;
+    document.getElementById('lbl-rds-infra').textContent = `$${rdsInfra}/mo`;
+
+    const ec2MonthlyLabor = ec2Hours * dbaRate;
+    const rdsMonthlyLabor = rdsHours * dbaRate;
+
+    const ec2Total3Yr = (ec2Infra + ec2MonthlyLabor) * 36;
+    const rdsTotal3Yr = (rdsInfra + rdsMonthlyLabor) * 36;
+
+    document.getElementById('tco-ec2-total').textContent = `$${ec2Total3Yr.toLocaleString()}`;
+    document.getElementById('tco-rds-total').textContent = `$${rdsTotal3Yr.toLocaleString()}`;
+
+    const diff = Math.abs(ec2Total3Yr - rdsTotal3Yr).toLocaleString();
+    const verdictEl = document.getElementById('tco-verdict-summary');
+    if (ec2Total3Yr < rdsTotal3Yr) {
+      verdictEl.innerHTML = `<span style="color:var(--blue)">EC2 is cheaper by $${diff} over 3 years</span> (Assumes low labor cost)`;
+    } else {
+      verdictEl.innerHTML = `<span style="color:var(--purple)">RDS is cheaper by $${diff} over 3 years</span> (Due to DBA labor savings)`;
+    }
+
+    const ctx = document.getElementById('tcoChart').getContext('2d');
+    if (tcoChart) tcoChart.destroy();
+    tcoChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['EC2 (Self-Hosted)', 'AWS RDS (Managed)'],
+        datasets: [
+          {
+            label: 'Infrastructure Cost (3 Yrs)',
+            data: [ec2Infra * 36, rdsInfra * 36],
+            backgroundColor: '#30363d'
+          },
+          {
+            label: 'DBA Labor Cost (3 Yrs)',
+            data: [ec2MonthlyLabor * 36, rdsMonthlyLabor * 36],
+            backgroundColor: ['#58a6ff', '#bc8cff']
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { stacked: true, grid: { color: '#21262d' }, ticks: { color: '#8b949e' } },
+          y: { stacked: true, grid: { color: '#21262d' }, ticks: { color: '#8b949e' } }
+        },
+        plugins: { legend: { labels: { color: '#c9d1d9' } } }
+      }
+    });
+  }
+
+  // Initialize defaults
+  window.addEventListener('DOMContentLoaded', () => {
+    initLiveChart();
+    updateCost();
+  });
+</script>
+
+</body>
+</html>
