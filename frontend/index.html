@@ -13,6 +13,10 @@
   <!-- Chart.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 
+  <!-- jsPDF for PDF export (Feature 6) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
   <style>
     :root {
       --bg: #07090e;
@@ -136,6 +140,56 @@
       100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
     }
 
+    /* ---- Feature 4: Live Health Monitor Bar ---- */
+    .health-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      padding: 8px 36px;
+      background: rgba(14, 19, 31, 0.9);
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .health-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .health-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .health-dot.online {
+      background: #10b981;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+    }
+
+    .health-dot.offline {
+      background: #f43f5e;
+      box-shadow: 0 0 6px rgba(244, 63, 94, 0.6);
+      animation: pulse-red 1.5s infinite;
+    }
+
+    @keyframes pulse-red {
+      0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(244, 63, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+    }
+
+    .health-label { color: var(--text-muted); }
+    .health-value { color: var(--text); }
+    .health-rtt { color: var(--emerald); font-weight: 700; }
+    .health-rtt.slow { color: var(--amber); }
+    .health-rtt.down { color: var(--rose); }
+
     /* Sub-header Navigation */
     nav {
       display: flex;
@@ -144,6 +198,7 @@
       border-bottom: 1px solid var(--border);
       padding: 0 36px;
       gap: 4px;
+      overflow-x: auto;
     }
 
     nav button {
@@ -159,6 +214,7 @@
       align-items: center;
       gap: 8px;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      white-space: nowrap;
     }
 
     nav button svg {
@@ -317,6 +373,27 @@
       box-shadow: 0 4px 14px rgba(217, 119, 6, 0.3);
     }
 
+    .btn-ghost {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--surface-3);
+      color: #fff;
+    }
+
+    .btn-emerald {
+      background: linear-gradient(135deg, #059669, #047857);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3);
+    }
+
+    .btn-emerald:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
     .btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -411,9 +488,13 @@
     /* Telemetry KPI Metrics */
     .telemetry-row {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 12px;
       margin-bottom: 20px;
+    }
+
+    .telemetry-row-3 {
+      grid-template-columns: repeat(3, 1fr);
     }
 
     .metric-card {
@@ -642,6 +723,38 @@
       background: linear-gradient(90deg, var(--blue), var(--purple));
       transition: width 0.3s ease;
     }
+
+    /* History Table */
+    .history-table {
+      width: 100%;
+      font-size: 12px;
+    }
+
+    .history-table th {
+      font-size: 10px;
+      padding: 10px 12px;
+    }
+
+    .history-table td {
+      padding: 10px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-dim);
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      stroke: var(--text-dim);
+      fill: none;
+      stroke-width: 1.5;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -666,23 +779,50 @@
     </div>
   </header>
 
+  <!-- Feature 4: Live Health Monitor Bar -->
+  <div class="health-bar" id="health-bar">
+    <div class="health-item">
+      <div class="health-dot" id="health-dot-ec2"></div>
+      <span class="health-label">EC2 Self-Hosted:</span>
+      <span class="health-rtt" id="health-rtt-ec2">Checking...</span>
+    </div>
+    <span style="color: var(--border);">│</span>
+    <div class="health-item">
+      <div class="health-dot" id="health-dot-rds"></div>
+      <span class="health-label">AWS RDS Managed:</span>
+      <span class="health-rtt" id="health-rtt-rds">Checking...</span>
+    </div>
+    <span style="color: var(--border);">│</span>
+    <div class="health-item">
+      <span class="health-label" style="color: var(--text-dim);">Auto-refresh: 5s</span>
+    </div>
+  </div>
+
   <!-- Navigation Tabs -->
   <nav>
-    <button class="active" onclick="switchTab('run')">
+    <button class="active" onclick="switchTab('run', this)">
       <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-      Run Live Benchmark (Side-by-Side)
+      Run Live Benchmark
     </button>
-    <button onclick="switchTab('fail')">
+    <button onclick="switchTab('fail', this)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      Chaos & Recovery Simulator
+      Chaos & Recovery
     </button>
-    <button onclick="switchTab('verdict')">
+    <button onclick="switchTab('scale', this)">
+      <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Scalability Explorer
+    </button>
+    <button onclick="switchTab('verdict', this)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
-      Verdict Decision Matrix
+      Verdict Matrix
     </button>
-    <button onclick="switchTab('cost')">
+    <button onclick="switchTab('cost', this)">
       <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
       FinOps TCO Advisor
+    </button>
+    <button onclick="switchTab('history', this)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History & Reports
     </button>
   </nav>
 
@@ -712,10 +852,12 @@
           </div>
         </div>
 
-        <button class="btn btn-primary" id="btn-run-all" onclick="runSideBySide()">
-          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Run Side-by-Side Comparison (EC2 vs RDS)
-        </button>
+        <div class="control-group">
+          <button class="btn btn-primary" id="btn-run-all" onclick="runSideBySide()">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            ⚡ Simultaneous (EC2 vs RDS)
+          </button>
+        </div>
       </div>
 
       <!-- Live Execution Progress Bar -->
@@ -742,15 +884,19 @@
           <div class="telemetry-row">
             <div class="metric-card">
               <div class="metric-value" id="ec2-tps" style="color:var(--blue);">—</div>
-              <div class="metric-label">TPS (Trans/Sec)</div>
+              <div class="metric-label">TPS</div>
             </div>
             <div class="metric-card">
               <div class="metric-value" id="ec2-p95" style="color:#34d399;">—</div>
-              <div class="metric-label">p95 Latency (ms)</div>
+              <div class="metric-label">p95 Latency</div>
             </div>
             <div class="metric-card">
               <div class="metric-value" id="ec2-qps" style="color:var(--text-muted);">—</div>
-              <div class="metric-label">Throughput QPS</div>
+              <div class="metric-label">QPS</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-value" id="ec2-rtt" style="color:var(--amber);">—</div>
+              <div class="metric-label">Network RTT</div>
             </div>
           </div>
 
@@ -768,7 +914,7 @@
               </div>
               <span>ec2-session.log</span>
             </div>
-            <div class="terminal" id="ec2-logs">Awaiting benchmark trigger... Click 'Run Side-by-Side' above.</div>
+            <div class="terminal" id="ec2-logs">Awaiting benchmark trigger... Click 'Simultaneous' above.</div>
           </div>
         </div>
 
@@ -788,15 +934,19 @@
           <div class="telemetry-row">
             <div class="metric-card">
               <div class="metric-value" id="rds-tps" style="color:var(--purple);">—</div>
-              <div class="metric-label">TPS (Trans/Sec)</div>
+              <div class="metric-label">TPS</div>
             </div>
             <div class="metric-card">
               <div class="metric-value" id="rds-p95" style="color:#fbbf24;">—</div>
-              <div class="metric-label">p95 Latency (ms)</div>
+              <div class="metric-label">p95 Latency</div>
             </div>
             <div class="metric-card">
               <div class="metric-value" id="rds-qps" style="color:var(--text-muted);">—</div>
-              <div class="metric-label">Throughput QPS</div>
+              <div class="metric-label">QPS</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-value" id="rds-rtt" style="color:var(--amber);">—</div>
+              <div class="metric-label">Network RTT</div>
             </div>
           </div>
 
@@ -814,7 +964,7 @@
               </div>
               <span>rds-session.log</span>
             </div>
-            <div class="terminal" id="rds-logs">Awaiting benchmark trigger... Click 'Run Side-by-Side' above.</div>
+            <div class="terminal" id="rds-logs">Awaiting benchmark trigger... Click 'Simultaneous' above.</div>
           </div>
         </div>
 
@@ -829,6 +979,20 @@
           </div>
         </div>
         <canvas id="liveChart" style="max-height: 280px;"></canvas>
+      </div>
+
+      <!-- Feature 3: Latency Distribution Histogram -->
+      <div class="chart-panel" style="margin-top: 24px;" id="latency-histogram-panel">
+        <div class="chart-header">
+          <div>
+            <h3>📊 Latency Distribution (Percentile Breakdown)</h3>
+            <p>Avg / p95 / p99 / Max latency comparison from final sysbench summary</p>
+          </div>
+        </div>
+        <canvas id="latencyHistogram" style="max-height: 260px;"></canvas>
+        <div id="latency-empty" style="text-align:center; padding:32px; color:var(--text-dim); font-size:13px;">
+          Run a benchmark to populate the latency distribution chart.
+        </div>
       </div>
 
     </div>
@@ -884,7 +1048,73 @@
       </div>
     </div>
 
-    <!-- TAB 3: VERDICT SCORECARD -->
+    <!-- TAB 3: SCALABILITY EXPLORER (Feature 5) -->
+    <div id="scale" class="tab-content">
+      <div class="card" style="margin-bottom: 24px;">
+        <h3 style="color:#fff; font-size:17px; margin-bottom:6px;">🚀 Scalability Explorer — Thread Ramp Analysis</h3>
+        <p style="font-size:13px; color:var(--text-muted);">
+          Automatically ramp concurrency from 1 → 2 → 4 → 8 → 16 → 32 threads. Discover the saturation point where each database architecture hits its throughput ceiling.
+        </p>
+      </div>
+
+      <div class="control-panel">
+        <div class="control-group">
+          <div class="field">
+            <label>Target Architecture</label>
+            <select id="scale-target">
+              <option value="both">Both (EC2 + RDS Comparison)</option>
+              <option value="ec2">EC2 Self-Hosted Only</option>
+              <option value="rds">AWS RDS Managed Only</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Duration Per Step</label>
+            <select id="scale-duration">
+              <option value="5" selected>5 Seconds (Quick Scan)</option>
+              <option value="10">10 Seconds (Accurate)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-emerald" id="btn-scale-start" onclick="runScalabilityTest()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Run Scalability Ramp
+        </button>
+      </div>
+
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="telemetry-row telemetry-row-3">
+          <div class="metric-card">
+            <div class="metric-value" id="scale-current-threads" style="color:var(--blue);">—</div>
+            <div class="metric-label">Current Threads</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" id="scale-peak-tps" style="color:var(--emerald);">—</div>
+            <div class="metric-label">Peak TPS (Best)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value" id="scale-status" style="color:var(--text-muted); font-size:14px;">Ready</div>
+            <div class="metric-label">Status</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div>
+            <h3>📈 Throughput vs. Concurrency Curve</h3>
+            <p>TPS at each thread level — find the optimal concurrency and saturation point</p>
+          </div>
+        </div>
+        <canvas id="scaleChart" style="max-height: 300px;"></canvas>
+      </div>
+
+      <div class="card" style="margin-top: 24px;">
+        <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">Scalability Test Log</div>
+        <div class="terminal" id="scale-logs" style="height:120px;">Ready to run scalability test...</div>
+      </div>
+    </div>
+
+    <!-- TAB 4: VERDICT SCORECARD -->
     <div id="verdict" class="tab-content">
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -916,7 +1146,7 @@
       </div>
     </div>
 
-    <!-- TAB 4: COST ADVISOR -->
+    <!-- TAB 5: COST ADVISOR -->
     <div id="cost" class="tab-content">
       <div class="grid-2">
         <div class="card">
@@ -965,7 +1195,7 @@
 
         <div class="card">
           <h3 style="color:#fff; font-size:16px; margin-bottom:16px;">📊 Cumulative 3-Year TCO Breakdown</h3>
-          <div class="telemetry-row">
+          <div class="telemetry-row" style="grid-template-columns: 1fr 1fr;">
             <div class="metric-card">
               <div class="metric-value" id="tco-ec2-total" style="color:var(--blue);">$0</div>
               <div class="metric-label">EC2 3-Year TCO</div>
@@ -983,22 +1213,117 @@
       </div>
     </div>
 
+    <!-- TAB 6: HISTORY & REPORTS (Feature 6) -->
+    <div id="history" class="tab-content">
+      <div class="card" style="margin-bottom: 24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="color:#fff; font-size:17px;">📜 Benchmark History & Report Export</h3>
+            <p style="font-size:13px; color:var(--text-muted); margin-top:4px;">
+              All benchmark runs are persisted to a local SQLite database. Download a professional PDF report summarizing your findings.
+            </p>
+          </div>
+          <div class="control-group">
+            <button class="btn btn-primary" onclick="downloadPDF()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download PDF Report
+            </button>
+            <button class="btn btn-ghost" onclick="clearHistory()">Clear History</button>
+            <button class="btn btn-ghost" onclick="loadHistory()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <table class="history-table" style="margin-top:16px;">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Timestamp</th>
+              <th>Target</th>
+              <th>Mode</th>
+              <th>Duration</th>
+              <th>Threads</th>
+              <th>TPS</th>
+              <th>p95 (ms)</th>
+              <th>p99 (ms)</th>
+              <th>Max (ms)</th>
+              <th>RTT (ms)</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body">
+            <tr><td colspan="11" class="empty-state">Loading history...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
   <script>
+    // ===== Chart instances =====
     let liveChart = null;
     let tcoChart = null;
+    let latencyChart = null;
+    let scaleChart = null;
 
-    function switchTab(id) {
+    // ===== Latency data store for histogram =====
+    let latencyData = { ec2: null, rds: null };
+
+    // ===== Tab Switching =====
+    function switchTab(id, btn) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
       document.getElementById(id).classList.add('active');
-      event.target.classList.add('active');
+      if (btn) btn.classList.add('active');
 
       if (id === 'verdict') loadVerdict();
       if (id === 'cost') updateCost();
+      if (id === 'history') loadHistory();
+      if (id === 'scale') initScaleChart();
     }
 
+    // ===== Feature 4: Live Health Monitor =====
+    async function pollHealth() {
+      try {
+        const res = await fetch('/api/health-check');
+        const data = await res.json();
+
+        const ec2Dot = document.getElementById('health-dot-ec2');
+        const rdsDot = document.getElementById('health-dot-rds');
+        const ec2Rtt = document.getElementById('health-rtt-ec2');
+        const rdsRtt = document.getElementById('health-rtt-rds');
+
+        ec2Dot.className = 'health-dot ' + (data.ec2.alive ? 'online' : 'offline');
+        rdsDot.className = 'health-dot ' + (data.rds.alive ? 'online' : 'offline');
+
+        if (data.ec2.alive) {
+          ec2Rtt.textContent = `Online (${data.ec2.latency_ms}ms)`;
+          ec2Rtt.className = 'health-rtt' + (data.ec2.latency_ms > 10 ? ' slow' : '');
+        } else {
+          ec2Rtt.textContent = 'OFFLINE';
+          ec2Rtt.className = 'health-rtt down';
+        }
+
+        if (data.rds.alive) {
+          rdsRtt.textContent = `Online (${data.rds.latency_ms}ms)`;
+          rdsRtt.className = 'health-rtt' + (data.rds.latency_ms > 50 ? ' slow' : '');
+        } else {
+          rdsRtt.textContent = 'OFFLINE';
+          rdsRtt.className = 'health-rtt down';
+        }
+      } catch (e) {
+        document.getElementById('health-rtt-ec2').textContent = 'Error';
+        document.getElementById('health-rtt-rds').textContent = 'Error';
+      }
+    }
+
+    // Poll health every 5 seconds
+    setInterval(pollHealth, 5000);
+    pollHealth();
+
+    // ===== Live TPS Chart =====
     function initLiveChart() {
       const ctx = document.getElementById('liveChart').getContext('2d');
       if (liveChart) liveChart.destroy();
@@ -1052,10 +1377,8 @@
               labels: {
                 color: '#e2e8f0',
                 font: { family: 'Plus Jakarta Sans', weight: 600, size: 12 },
-                boxWidth: 14,
-                boxHeight: 14,
-                usePointStyle: true,
-                pointStyle: 'circle'
+                boxWidth: 14, boxHeight: 14,
+                usePointStyle: true, pointStyle: 'circle'
               }
             },
             tooltip: {
@@ -1072,13 +1395,81 @@
       });
     }
 
-    // Stream runner for one target
+    // ===== Feature 3: Latency Distribution Histogram =====
+    function renderLatencyHistogram() {
+      const panel = document.getElementById('latency-histogram-panel');
+      const emptyMsg = document.getElementById('latency-empty');
+      
+      if (!latencyData.ec2 && !latencyData.rds) {
+        emptyMsg.style.display = 'block';
+        return;
+      }
+      emptyMsg.style.display = 'none';
+
+      const ctx = document.getElementById('latencyHistogram').getContext('2d');
+      if (latencyChart) latencyChart.destroy();
+
+      const labels = ['Avg (p50)', 'p95', 'p99', 'Max'];
+      const ec2Vals = latencyData.ec2 ? [
+        latencyData.ec2.avg || 0, latencyData.ec2.p95 || 0,
+        latencyData.ec2.p99 || 0, latencyData.ec2.max || 0
+      ] : [0, 0, 0, 0];
+      const rdsVals = latencyData.rds ? [
+        latencyData.rds.avg || 0, latencyData.rds.p95 || 0,
+        latencyData.rds.p99 || 0, latencyData.rds.max || 0
+      ] : [0, 0, 0, 0];
+
+      latencyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'EC2 Self-Hosted (ms)',
+              data: ec2Vals,
+              backgroundColor: 'rgba(59, 130, 246, 0.7)',
+              borderColor: '#3b82f6',
+              borderWidth: 1,
+              borderRadius: 4
+            },
+            {
+              label: 'AWS RDS Managed (ms)',
+              data: rdsVals,
+              backgroundColor: 'rgba(168, 85, 247, 0.7)',
+              borderColor: '#a855f7',
+              borderWidth: 1,
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { weight: 600 } } },
+            y: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: '#94a3b8' },
+              beginAtZero: true,
+              title: { display: true, text: 'Latency (ms)', color: '#64748b', font: { size: 11, weight: 600 } }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#e2e8f0', font: { weight: 600 } } },
+            tooltip: { backgroundColor: '#0e131f', titleColor: '#fff', bodyColor: '#cbd5e1', borderColor: '#232d46', borderWidth: 1 }
+          }
+        }
+      });
+    }
+
+    // ===== Stream runner for one target =====
     async function streamRun(target, mode, duration, datasetIndex) {
       const statusPill = document.getElementById(`${target}-status-pill`);
       const logs = document.getElementById(`${target}-logs`);
       const tpsEl = document.getElementById(`${target}-tps`);
       const p95El = document.getElementById(`${target}-p95`);
       const qpsEl = document.getElementById(`${target}-qps`);
+      const rttEl = document.getElementById(`${target}-rtt`);
 
       statusPill.className = 'badge-status status-active';
       statusPill.textContent = 'Running...';
@@ -1112,6 +1503,9 @@
                   tpsEl.textContent = data.tps.toFixed(1);
                   p95El.textContent = data.p95 ? data.p95.toFixed(2) : '—';
                   qpsEl.textContent = data.qps ? Math.round(data.qps) : '—';
+                  if (data.network_rtt_ms !== undefined && data.network_rtt_ms >= 0) {
+                    rttEl.textContent = data.network_rtt_ms + 'ms';
+                  }
                   logs.textContent += `[${tickCount}s] ${data.raw}\n`;
                   logs.scrollTop = logs.scrollHeight;
 
@@ -1125,6 +1519,15 @@
                   logs.scrollTop = logs.scrollHeight;
                   tpsEl.textContent = data.final_tps.toFixed(1);
                   p95El.textContent = data.final_p95.toFixed(2);
+
+                  // Store latency distribution data (Feature 3)
+                  latencyData[data.target] = {
+                    avg: data.avg_latency,
+                    p95: data.final_p95,
+                    p99: data.p99_latency,
+                    max: data.max_latency
+                  };
+                  renderLatencyHistogram();
                 }
               } catch (e) {}
             }
@@ -1156,6 +1559,7 @@
       btnSelf.disabled = false;
     }
 
+    // ===== Feature 2: True Simultaneous Side-by-Side =====
     async function runSideBySide() {
       const mode = document.getElementById('workload-mode').value;
       const duration = parseInt(document.getElementById('workload-duration').value, 10) || 15;
@@ -1169,19 +1573,113 @@
 
       initLiveChart();
 
-      // Step 1: EC2
-      await streamRun('ec2', mode, duration, 0);
+      // Reset statuses
+      const ec2Pill = document.getElementById('ec2-status-pill');
+      const rdsPill = document.getElementById('rds-status-pill');
+      ec2Pill.className = 'badge-status status-active';
+      ec2Pill.textContent = 'Running...';
+      rdsPill.className = 'badge-status status-active';
+      rdsPill.textContent = 'Running...';
 
-      await new Promise(r => setTimeout(r, 1200));
+      const ec2Logs = document.getElementById('ec2-logs');
+      const rdsLogs = document.getElementById('rds-logs');
+      ec2Logs.textContent = `[INFO] Simultaneous ${mode.toUpperCase()} test starting on EC2 (${duration}s)...\n`;
+      rdsLogs.textContent = `[INFO] Simultaneous ${mode.toUpperCase()} test starting on RDS (${duration}s)...\n`;
 
-      // Step 2: RDS
-      await streamRun('rds', mode, duration, 1);
+      let ec2Tick = 0, rdsTick = 0;
+
+      try {
+        const response = await fetch('/api/run-simultaneous', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, duration })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.substring(6));
+
+                if (data.type === 'init') {
+                  if (data.ec2_rtt >= 0) document.getElementById('ec2-rtt').textContent = data.ec2_rtt + 'ms';
+                  if (data.rds_rtt >= 0) document.getElementById('rds-rtt').textContent = data.rds_rtt + 'ms';
+                }
+
+                if (data.type === 'tick') {
+                  const isEC2 = data.target === 'ec2';
+                  const tpsEl = document.getElementById(`${data.target}-tps`);
+                  const p95El = document.getElementById(`${data.target}-p95`);
+                  const qpsEl = document.getElementById(`${data.target}-qps`);
+                  const logs = isEC2 ? ec2Logs : rdsLogs;
+                  const dsIdx = isEC2 ? 0 : 1;
+
+                  if (isEC2) ec2Tick++; else rdsTick++;
+                  const tick = isEC2 ? ec2Tick : rdsTick;
+
+                  tpsEl.textContent = data.tps.toFixed(1);
+                  p95El.textContent = data.p95 ? data.p95.toFixed(2) : '—';
+                  qpsEl.textContent = data.qps ? Math.round(data.qps) : '—';
+
+                  logs.textContent += `[${tick}s] ${data.raw}\n`;
+                  logs.scrollTop = logs.scrollHeight;
+
+                  const maxTick = Math.max(ec2Tick, rdsTick);
+                  while (liveChart.data.labels.length < maxTick) {
+                    liveChart.data.labels.push(`${liveChart.data.labels.length + 1}s`);
+                  }
+                  liveChart.data.datasets[dsIdx].data.push(data.tps);
+                  liveChart.update();
+                }
+
+                if (data.type === 'complete') {
+                  const isEC2 = data.target === 'ec2';
+                  const pill = isEC2 ? ec2Pill : rdsPill;
+                  const logs = isEC2 ? ec2Logs : rdsLogs;
+                  const tpsEl = document.getElementById(`${data.target}-tps`);
+                  const p95El = document.getElementById(`${data.target}-p95`);
+
+                  pill.className = 'badge-status status-complete';
+                  pill.textContent = 'Completed';
+                  tpsEl.textContent = data.final_tps ? data.final_tps.toFixed(1) : '—';
+                  p95El.textContent = data.final_p95 ? data.final_p95.toFixed(2) : '—';
+                  logs.textContent += `\n[COMPLETE] ${data.target.toUpperCase()} | TPS: ${data.final_tps} | p95: ${data.final_p95}ms\n`;
+                  logs.scrollTop = logs.scrollHeight;
+
+                  // Store latency data for histogram
+                  latencyData[data.target] = {
+                    avg: data.avg_latency,
+                    p95: data.final_p95,
+                    p99: data.p99_latency,
+                    max: data.max_latency
+                  };
+                  renderLatencyHistogram();
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (err) {
+        ec2Logs.textContent += `[ERROR] ${err.message}\n`;
+        rdsLogs.textContent += `[ERROR] ${err.message}\n`;
+      }
 
       btnAll.disabled = false;
       btnEc2.disabled = false;
       btnRds.disabled = false;
     }
 
+    // ===== Failure Simulator =====
     async function triggerFail(target) {
       const btn = document.getElementById(target === 'ec2' ? 'btn-fail-ec2' : 'btn-fail-rds');
       const logs = document.getElementById('fail-logs');
@@ -1225,6 +1723,170 @@
       }
     }
 
+    // ===== Feature 5: Scalability Explorer =====
+    function initScaleChart() {
+      if (scaleChart) return;
+      const ctx = document.getElementById('scaleChart').getContext('2d');
+      scaleChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ['1', '2', '4', '8', '16', '32'],
+          datasets: [
+            {
+              label: 'EC2 Self-Hosted (TPS)',
+              data: [],
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              fill: true,
+              tension: 0.3,
+              borderWidth: 3,
+              pointRadius: 6,
+              pointHoverRadius: 8,
+              pointBackgroundColor: '#3b82f6',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2
+            },
+            {
+              label: 'AWS RDS Managed (TPS)',
+              data: [],
+              borderColor: '#a855f7',
+              backgroundColor: 'rgba(168, 85, 247, 0.15)',
+              fill: true,
+              tension: 0.3,
+              borderWidth: 3,
+              pointRadius: 6,
+              pointHoverRadius: 8,
+              pointBackgroundColor: '#a855f7',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 400 },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: '#94a3b8', font: { weight: 600 } },
+              title: { display: true, text: 'Thread Count (Concurrency)', color: '#64748b', font: { size: 12, weight: 600 } }
+            },
+            y: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: '#94a3b8' },
+              beginAtZero: true,
+              title: { display: true, text: 'Transactions Per Second (TPS)', color: '#64748b', font: { size: 12, weight: 600 } }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#e2e8f0', font: { weight: 600, size: 13 } } },
+            tooltip: { backgroundColor: '#0e131f', titleColor: '#fff', bodyColor: '#cbd5e1', borderColor: '#232d46', borderWidth: 1, padding: 12 }
+          }
+        }
+      });
+    }
+
+    async function runScalabilityForTarget(target, datasetIdx) {
+      const duration = parseInt(document.getElementById('scale-duration').value, 10) || 5;
+      const logs = document.getElementById('scale-logs');
+      const statusEl = document.getElementById('scale-status');
+      const threadsEl = document.getElementById('scale-current-threads');
+      const peakEl = document.getElementById('scale-peak-tps');
+
+      let peakTps = 0;
+      const threadMap = { '1': 0, '2': 1, '4': 2, '8': 3, '16': 4, '32': 5 };
+
+      try {
+        const response = await fetch('/api/scalability-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target, duration })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.substring(6));
+
+                if (data.type === 'status') {
+                  logs.textContent += `[${target.toUpperCase()}] ${data.message}\n`;
+                  logs.scrollTop = logs.scrollHeight;
+                  statusEl.textContent = 'Testing...';
+                  statusEl.style.color = 'var(--amber)';
+                }
+
+                if (data.type === 'scale-point') {
+                  const idx = threadMap[String(data.threads)];
+                  scaleChart.data.datasets[datasetIdx].data[idx] = data.tps;
+                  scaleChart.update();
+
+                  threadsEl.textContent = data.threads;
+                  if (data.tps > peakTps) {
+                    peakTps = data.tps;
+                    peakEl.textContent = data.tps.toFixed(1);
+                  }
+
+                  logs.textContent += `[${target.toUpperCase()}] ${data.threads} threads → ${data.tps} TPS | p95: ${data.p95}ms | p99: ${data.p99}ms\n`;
+                  logs.scrollTop = logs.scrollHeight;
+                }
+
+                if (data.type === 'scale-done') {
+                  logs.textContent += `[${target.toUpperCase()}] Scalability ramp complete!\n`;
+                  logs.scrollTop = logs.scrollHeight;
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (err) {
+        logs.textContent += `[ERROR] ${err.message}\n`;
+      }
+    }
+
+    async function runScalabilityTest() {
+      const targetSel = document.getElementById('scale-target').value;
+      const btn = document.getElementById('btn-scale-start');
+      const statusEl = document.getElementById('scale-status');
+      const logs = document.getElementById('scale-logs');
+
+      btn.disabled = true;
+      logs.textContent = '';
+      statusEl.textContent = 'Starting...';
+      statusEl.style.color = 'var(--amber)';
+
+      initScaleChart();
+      // Clear existing data
+      scaleChart.data.datasets[0].data = [null, null, null, null, null, null];
+      scaleChart.data.datasets[1].data = [null, null, null, null, null, null];
+      scaleChart.update();
+
+      if (targetSel === 'both') {
+        await runScalabilityForTarget('ec2', 0);
+        await runScalabilityForTarget('rds', 1);
+      } else if (targetSel === 'ec2') {
+        await runScalabilityForTarget('ec2', 0);
+      } else {
+        await runScalabilityForTarget('rds', 1);
+      }
+
+      statusEl.textContent = 'Complete ✓';
+      statusEl.style.color = 'var(--emerald)';
+      btn.disabled = false;
+    }
+
+    // ===== Verdict Scorecard =====
     async function loadVerdict() {
       const tbody = document.getElementById('verdict-table-body');
       try {
@@ -1274,6 +1936,7 @@
       }
     }
 
+    // ===== TCO Calculator =====
     function updateCost() {
       const dbaRate = parseInt(document.getElementById('dba-rate').value, 10);
       const ec2Hours = parseInt(document.getElementById('ec2-hours').value, 10);
@@ -1314,12 +1977,14 @@
             {
               label: 'Infrastructure Hardware ($)',
               data: [ec2Infra * 36, rdsInfra * 36],
-              backgroundColor: '#1e293b'
+              backgroundColor: '#1e293b',
+              borderRadius: 4
             },
             {
               label: 'Human DBA Labor ($)',
               data: [ec2MonthlyLabor * 36, rdsMonthlyLabor * 36],
-              backgroundColor: ['#3b82f6', '#a855f7']
+              backgroundColor: ['#3b82f6', '#a855f7'],
+              borderRadius: 4
             }
           ]
         },
@@ -1337,6 +2002,149 @@
       });
     }
 
+    // ===== Feature 6: History & Reports =====
+    async function loadHistory() {
+      const tbody = document.getElementById('history-table-body');
+      try {
+        const res = await fetch('/api/history');
+        const rows = await res.json();
+
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="11" class="empty-state">No benchmark history yet. Run a test to start recording.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = rows.map(r => `
+          <tr>
+            <td>${r.id}</td>
+            <td style="color:var(--text-muted);">${r.timestamp ? r.timestamp.replace('T', ' ').replace('Z', '') : '—'}</td>
+            <td><span class="tag-winner tag-${r.target}" style="padding:2px 8px; font-size:11px;">${r.target.toUpperCase()}</span></td>
+            <td>${r.mode || '—'}</td>
+            <td>${r.duration || '—'}s</td>
+            <td>${r.threads || '—'}</td>
+            <td style="color:var(--emerald); font-weight:700;">${r.final_tps ? r.final_tps.toFixed(1) : '—'}</td>
+            <td>${r.final_p95 ? r.final_p95.toFixed(2) : '—'}</td>
+            <td>${r.p99_latency ? r.p99_latency.toFixed(2) : '—'}</td>
+            <td>${r.max_latency ? r.max_latency.toFixed(2) : '—'}</td>
+            <td>${r.network_rtt_ms ? r.network_rtt_ms.toFixed(1) : '—'}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="11" style="color:var(--rose);">Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function clearHistory() {
+      if (!confirm('Clear all benchmark history? This cannot be undone.')) return;
+      await fetch('/api/history/clear', { method: 'POST' });
+      loadHistory();
+    }
+
+    function downloadPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      // Title
+      doc.setFontSize(20);
+      doc.setTextColor(37, 99, 235);
+      doc.text('DB Ops Advisor — Benchmark Report', 14, 20);
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
+      doc.text('Cloud Computing Project (BCSE408L) — VIT', 14, 34);
+
+      // Verdict Section
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.text('Verdict Scorecard', 14, 46);
+
+      const verdictRows = document.querySelectorAll('#verdict-table-body tr');
+      const verdictData = [];
+      verdictRows.forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 4) {
+          verdictData.push([
+            cells[0].textContent.trim().split('\n')[0],
+            cells[1].textContent.trim(),
+            cells[2].textContent.trim(),
+            cells[3].textContent.trim()
+          ]);
+        }
+      });
+
+      if (verdictData.length > 0) {
+        doc.autoTable({
+          startY: 50,
+          head: [['Dimension', 'EC2', 'RDS', 'Winner']],
+          body: verdictData,
+          theme: 'grid',
+          headStyles: { fillColor: [37, 99, 235] },
+          styles: { fontSize: 8, cellPadding: 3 }
+        });
+      }
+
+      // TCO Section
+      let y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 14 : 90;
+      doc.setFontSize(14);
+      doc.text('3-Year TCO Summary', 14, y);
+      y += 8;
+
+      const tcoEc2 = document.getElementById('tco-ec2-total').textContent;
+      const tcoRds = document.getElementById('tco-rds-total').textContent;
+      const tcoVerdict = document.getElementById('tco-verdict-summary').textContent;
+
+      doc.autoTable({
+        startY: y,
+        head: [['Metric', 'Value']],
+        body: [
+          ['EC2 3-Year TCO', tcoEc2],
+          ['RDS 3-Year TCO', tcoRds],
+          ['Verdict', tcoVerdict]
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [124, 58, 237] },
+        styles: { fontSize: 9, cellPadding: 4 }
+      });
+
+      // History Section
+      y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 14 : y + 40;
+      if (y > 240) { doc.addPage(); y = 20; }
+
+      doc.setFontSize(14);
+      doc.text('Benchmark History', 14, y);
+
+      const historyRows = document.querySelectorAll('#history-table-body tr');
+      const histData = [];
+      historyRows.forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 7) {
+          histData.push([
+            cells[0].textContent.trim(),
+            cells[2].textContent.trim(),
+            cells[3].textContent.trim(),
+            cells[6].textContent.trim(),
+            cells[7].textContent.trim(),
+            cells[10].textContent.trim()
+          ]);
+        }
+      });
+
+      if (histData.length > 0) {
+        doc.autoTable({
+          startY: y + 6,
+          head: [['#', 'Target', 'Mode', 'TPS', 'p95 (ms)', 'RTT (ms)']],
+          body: histData,
+          theme: 'grid',
+          headStyles: { fillColor: [16, 185, 129] },
+          styles: { fontSize: 8, cellPadding: 3 }
+        });
+      }
+
+      doc.save('db-ops-advisor-report.pdf');
+    }
+
+    // ===== Init on Load =====
     window.addEventListener('DOMContentLoaded', () => {
       initLiveChart();
       updateCost();
