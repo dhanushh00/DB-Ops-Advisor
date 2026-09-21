@@ -401,6 +401,49 @@
       box-shadow: none !important;
     }
 
+    /* Cost Preset Buttons (Dark Glassmorphic) */
+    .cost-preset-btn {
+      background: var(--surface-2) !important;
+      color: var(--text-muted) !important;
+      border: 1px solid var(--border) !important;
+      padding: 7px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cost-preset-btn:hover {
+      background: var(--surface-3) !important;
+      color: #fff !important;
+      border-color: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .cost-preset-btn.active-blue {
+      background: rgba(59, 130, 246, 0.15) !important;
+      border-color: var(--blue) !important;
+      color: #60a5fa !important;
+      box-shadow: 0 0 14px rgba(59, 130, 246, 0.25);
+    }
+
+    .cost-preset-btn.active-emerald {
+      background: rgba(16, 185, 129, 0.15) !important;
+      border-color: var(--emerald) !important;
+      color: #34d399 !important;
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.25);
+    }
+
+    .cost-preset-btn.active-purple {
+      background: rgba(168, 85, 247, 0.15) !important;
+      border-color: var(--purple) !important;
+      color: #c084fc !important;
+      box-shadow: 0 0 14px rgba(168, 85, 247, 0.25);
+    }
+
     /* Cards Grid */
     .grid-2 {
       display: grid;
@@ -1152,106 +1195,88 @@
       <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
           <div>
-            <div style="font-weight:700; font-size:14px; color:#fff;">💡 Scenario Presets</div>
-            <div style="font-size:12px; color:var(--text-dim);">Switch between raw AWS cloud hosting bills vs. enterprise labor-adjusted TCO:</div>
+            <div style="font-weight:700; font-size:14px; color:#fff;">💡 Query Traffic & Pricing Presets</div>
+            <div style="font-size:12px; color:var(--text-dim);">EC2 costs are fixed by compute clock hours; AWS RDS scales with query request volume:</div>
           </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-secondary" onclick="setCostPreset('academic')" id="preset-academic" style="padding:6px 14px; font-size:12px; border-color:rgba(59,130,246,0.4); color:var(--blue); font-weight:700;">🎓 Raw Cloud Hosting ($0 DBA Labor)</button>
-            <button class="btn btn-secondary" onclick="setCostPreset('startup')" id="preset-startup" style="padding:6px 14px; font-size:12px;">🚀 Lean Startup ($20/hr)</button>
-            <button class="btn btn-secondary" onclick="setCostPreset('enterprise')" id="preset-enterprise" style="padding:6px 14px; font-size:12px;">🏢 Enterprise ($45/hr)</button>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="cost-preset-btn" onclick="setCostPreset('low')" id="preset-low">🟢 Low Traffic (1M Queries/mo)</button>
+            <button class="cost-preset-btn active-blue" onclick="setCostPreset('normal')" id="preset-normal">🟡 Moderate Traffic (5M Queries/mo)</button>
+            <button class="cost-preset-btn" onclick="setCostPreset('surge')" id="preset-surge">🔴 High Surge Traffic (25M Queries/mo)</button>
           </div>
         </div>
       </div>
 
       <div class="grid-2">
         <div class="card">
-          <h3 style="color:#fff; font-size:16px; margin-bottom:16px;">💰 Cost & TCO Parameter Sliders</h3>
+          <h3 style="color:#fff; font-size:16px; margin-bottom:16px;">⚙️ Cost Drivers: Timing vs. Request Scaling</h3>
 
-          <div class="slider-box">
+          <!-- EC2 Timing Slider -->
+          <div class="slider-box" style="border-left: 3px solid var(--blue); padding-left: 14px;">
             <div class="slider-meta">
-              <span>Database Administrator (DBA) Hourly Rate:</span>
-              <span class="val" id="lbl-dba-rate">$0/hr</span>
+              <span><strong>⏱️ EC2 Compute Uptime (Time-Based):</strong></span>
+              <span class="val" id="lbl-ec2-hours" style="color:var(--blue);">730 hrs/mo (24/7 Continuous)</span>
             </div>
-            <input type="range" id="dba-rate" min="0" max="150" value="0" oninput="updateCost()">
+            <input type="range" id="ec2-runtime" min="100" max="730" step="10" value="730" oninput="updateCost()">
+            <div style="font-size:11px; color:var(--text-dim); margin-top:6px;">
+              Fixed hourly VM rate ($0.0116/hr) + 20GB gp3 EBS storage ($2.50). <strong>Zero extra cost for query requests.</strong>
+            </div>
           </div>
 
-          <div class="slider-box">
+          <!-- RDS Request Slider -->
+          <div class="slider-box" style="border-left: 3px solid var(--purple); padding-left: 14px;">
             <div class="slider-meta">
-              <span>EC2 DBA Labor (Patching, Backups, Maintenance):</span>
-              <span class="val" id="lbl-ec2-hours">8 hrs/mo</span>
+              <span><strong>📈 RDS Query & Request Volume (Request-Based):</strong></span>
+              <span class="val" id="lbl-rds-requests" style="color:var(--purple);">5.0 Million queries/mo</span>
             </div>
-            <input type="range" id="ec2-hours" min="0" max="30" value="8" oninput="updateCost()">
+            <input type="range" id="rds-requests" min="1" max="50" step="1" value="5" oninput="updateCost()">
+            <div style="font-size:11px; color:var(--text-dim); margin-top:6px;">
+              Base instance ($18/mo) + $2.50 per million queries (provisioned IOPS, WAL generation, snapshot sync).
+            </div>
           </div>
 
+          <!-- Timeline Slider -->
           <div class="slider-box">
             <div class="slider-meta">
-              <span>RDS DBA Labor (Schema Review, Basic Oversight):</span>
-              <span class="val" id="lbl-rds-hours">1 hrs/mo</span>
+              <span><strong>🗓️ Forecast Timeline:</strong></span>
+              <span class="val" id="lbl-timeline" style="color:#fff;">3 Years (36 Months)</span>
             </div>
-            <input type="range" id="rds-hours" min="0" max="10" value="1" oninput="updateCost()">
+            <input type="range" id="cost-timeline" min="1" max="5" step="1" value="3" oninput="updateCost()">
           </div>
 
-          <div class="slider-box">
-            <div class="slider-meta">
-              <span>EC2 Compute & Storage ($/month):</span>
-              <span class="val" id="lbl-ec2-infra">$15/mo</span>
-            </div>
-            <input type="range" id="ec2-infra" min="5" max="100" value="15" oninput="updateCost()">
-          </div>
-
-          <div class="slider-box">
-            <div class="slider-meta">
-              <span>AWS RDS Managed Compute & Storage ($/month):</span>
-              <span class="val" id="lbl-rds-infra">$28/mo</span>
-            </div>
-            <input type="range" id="rds-infra" min="15" max="200" value="28" oninput="updateCost()">
-          </div>
-
-          <!-- Pricing Model Architecture Comparison -->
+          <!-- Architecture Comparison Cards -->
           <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div style="background:rgba(59, 130, 246, 0.08); border:1px solid rgba(59, 130, 246, 0.25); border-radius:8px; padding:12px;">
-              <div style="color:var(--blue); font-weight:700; font-size:12px; margin-bottom:4px;">🖥️ EC2: Constant Flat-Rate Compute</div>
+              <div style="color:var(--blue); font-weight:700; font-size:12px; margin-bottom:4px;">🖥️ EC2: Constant Time-Based</div>
               <div style="font-size:11px; color:var(--text-dim); line-height:1.4;">
-                Charges a fixed, predictable hourly VM rate (~$0.0116/hr). Zero per-query fees or request surcharges. High-volume traffic does NOT inflate your monthly compute bill.
+                Charged strictly by VM clock uptime. Whether you run 1 transaction or 10,000,000 transactions, the compute cost is completely flat.
               </div>
             </div>
             <div style="background:rgba(168, 85, 247, 0.08); border:1px solid rgba(168, 85, 247, 0.25); border-radius:8px; padding:12px;">
-              <div style="color:var(--purple); font-weight:700; font-size:12px; margin-bottom:4px;">☁️ AWS RDS: Managed & Request/Storage Scale</div>
+              <div style="color:var(--purple); font-weight:700; font-size:12px; margin-bottom:4px;">☁️ AWS RDS: Request & I/O Scaling</div>
               <div style="font-size:11px; color:var(--text-dim); line-height:1.4;">
-                Higher baseline (~1.8x EC2) plus storage I/O, automated snapshot retention, and Multi-AZ replication. Managed convenience with cloud utility pricing.
+                Base instance plus storage I/O operations and snapshot growth. Query surges directly scale up your AWS database invoice.
               </div>
             </div>
           </div>
         </div>
 
         <div class="card">
-          <h3 style="color:#fff; font-size:16px; margin-bottom:16px;">📊 3-Year Cloud Cost Comparison</h3>
+          <h3 style="color:#fff; font-size:16px; margin-bottom:16px;">📊 Total Cost Comparison</h3>
           
-          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-dim); margin-bottom:6px; font-weight:700;">1. Pure Cloud Infrastructure (Hardware & Hosting Bills)</div>
-          <div class="telemetry-row" style="grid-template-columns: 1fr 1fr; margin-bottom:14px;">
-            <div class="metric-card" style="border-left: 3px solid var(--blue);">
-              <div class="metric-value" id="raw-ec2-total" style="color:var(--blue); font-size:20px;">$540</div>
-              <div class="metric-label">EC2 3-Yr Compute ($15/mo)</div>
+          <div class="telemetry-row" style="grid-template-columns: 1fr 1fr; margin-bottom:16px;">
+            <div class="metric-card" style="border-left: 3px solid var(--blue); padding:16px;">
+              <div style="font-size:11px; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:4px;">🖥️ EC2 Total Cost (Time-Based)</div>
+              <div class="metric-value" id="ec2-total-cost" style="color:var(--blue); font-size:24px;">$395</div>
+              <div class="metric-label" id="ec2-monthly-lbl" style="font-size:12px; color:#cbd5e1; margin-top:4px;">$10.97 / month (Flat Rate)</div>
             </div>
-            <div class="metric-card" style="border-left: 3px solid var(--purple);">
-              <div class="metric-value" id="raw-rds-total" style="color:var(--purple); font-size:20px;">$1,008</div>
-              <div class="metric-label">RDS 3-Yr Managed ($28/mo)</div>
+            <div class="metric-card" style="border-left: 3px solid var(--purple); padding:16px;">
+              <div style="font-size:11px; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:4px;">☁️ AWS RDS Total Cost (Request-Based)</div>
+              <div class="metric-value" id="rds-total-cost" style="color:var(--purple); font-size:24px;">$1,098</div>
+              <div class="metric-label" id="rds-monthly-lbl" style="font-size:12px; color:#cbd5e1; margin-top:4px;">$30.50 / month (5M queries)</div>
             </div>
           </div>
 
-          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-dim); margin-bottom:6px; font-weight:700;">2. Total Cost of Ownership (Infra + Human DBA Labor)</div>
-          <div class="telemetry-row" style="grid-template-columns: 1fr 1fr;">
-            <div class="metric-card">
-              <div class="metric-value" id="tco-ec2-total" style="color:var(--blue); font-size:20px;">$0</div>
-              <div class="metric-label">EC2 Blended TCO</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-value" id="tco-rds-total" style="color:var(--purple); font-size:20px;">$0</div>
-              <div class="metric-label">RDS Blended TCO</div>
-            </div>
-          </div>
-          
-          <div id="tco-verdict-summary" style="margin: 14px 0; font-size:13px; text-align:center; padding:12px; background:var(--surface-2); border-radius:8px; border:1px solid var(--border);"></div>
+          <div id="tco-verdict-summary" style="margin: 16px 0; font-size:13px; text-align:center; padding:14px; background:var(--surface-2); border-radius:8px; border:1px solid var(--border);"></div>
           
           <canvas id="tcoChart" style="max-height: 200px;"></canvas>
         </div>
@@ -1993,129 +2018,151 @@
       }
     }
 
-    // ===== TCO Calculator & Scenario Presets =====
+    // ===== Timing vs Request Cost Engine =====
     function setCostPreset(type) {
-      const btnAcademic = document.getElementById('preset-academic');
-      const btnStartup = document.getElementById('preset-startup');
-      const btnEnterprise = document.getElementById('preset-enterprise');
-      
-      [btnAcademic, btnStartup, btnEnterprise].forEach(b => {
-        if (b) {
-          b.style.borderColor = 'var(--border)';
-          b.style.color = 'var(--text)';
-        }
+      const btnLow = document.getElementById('preset-low');
+      const btnNormal = document.getElementById('preset-normal');
+      const btnSurge = document.getElementById('preset-surge');
+
+      [btnLow, btnNormal, btnSurge].forEach(b => {
+        if (b) b.className = 'cost-preset-btn';
       });
 
-      if (type === 'academic') {
-        document.getElementById('dba-rate').value = 0;
-        document.getElementById('ec2-hours').value = 6;
-        document.getElementById('rds-hours').value = 1;
-        document.getElementById('ec2-infra').value = 15;
-        document.getElementById('rds-infra').value = 28;
-        if (btnAcademic) {
-          btnAcademic.style.borderColor = 'rgba(59,130,246,0.6)';
-          btnAcademic.style.color = 'var(--blue)';
-        }
-      } else if (type === 'startup') {
-        document.getElementById('dba-rate').value = 20;
-        document.getElementById('ec2-hours').value = 8;
-        document.getElementById('rds-hours').value = 2;
-        document.getElementById('ec2-infra').value = 18;
-        document.getElementById('rds-infra').value = 32;
-        if (btnStartup) {
-          btnStartup.style.borderColor = 'rgba(52,211,153,0.6)';
-          btnStartup.style.color = 'var(--emerald)';
-        }
-      } else if (type === 'enterprise') {
-        document.getElementById('dba-rate').value = 45;
-        document.getElementById('ec2-hours').value = 12;
-        document.getElementById('rds-hours').value = 2;
-        document.getElementById('ec2-infra').value = 25;
-        document.getElementById('rds-infra').value = 48;
-        if (btnEnterprise) {
-          btnEnterprise.style.borderColor = 'rgba(168,85,247,0.6)';
-          btnEnterprise.style.color = 'var(--purple)';
-        }
+      if (type === 'low') {
+        document.getElementById('ec2-runtime').value = 730;
+        document.getElementById('rds-requests').value = 1;
+        if (btnLow) btnLow.className = 'cost-preset-btn active-emerald';
+      } else if (type === 'normal') {
+        document.getElementById('ec2-runtime').value = 730;
+        document.getElementById('rds-requests').value = 5;
+        if (btnNormal) btnNormal.className = 'cost-preset-btn active-blue';
+      } else if (type === 'surge') {
+        document.getElementById('ec2-runtime').value = 730;
+        document.getElementById('rds-requests').value = 25;
+        if (btnSurge) btnSurge.className = 'cost-preset-btn active-purple';
       }
       updateCost();
     }
 
     function updateCost() {
-      const dbaRate = parseInt(document.getElementById('dba-rate').value, 10);
-      const ec2Hours = parseInt(document.getElementById('ec2-hours').value, 10);
-      const rdsHours = parseInt(document.getElementById('rds-hours').value, 10);
-      const ec2Infra = parseInt(document.getElementById('ec2-infra').value, 10);
-      const rdsInfra = parseInt(document.getElementById('rds-infra').value, 10);
+      const ec2RuntimeInput = document.getElementById('ec2-runtime');
+      const rdsRequestsInput = document.getElementById('rds-requests');
+      const timelineInput = document.getElementById('cost-timeline');
 
-      document.getElementById('lbl-dba-rate').textContent = `$${dbaRate}/hr`;
-      document.getElementById('lbl-ec2-hours').textContent = `${ec2Hours} hrs/mo`;
-      document.getElementById('lbl-rds-hours').textContent = `${rdsHours} hrs/mo`;
-      document.getElementById('lbl-ec2-infra').textContent = `$${ec2Infra}/mo`;
-      document.getElementById('lbl-rds-infra').textContent = `$${rdsInfra}/mo`;
+      if (!ec2RuntimeInput || !rdsRequestsInput || !timelineInput) return;
 
-      // Pure Infrastructure
-      const rawEc2_3Yr = ec2Infra * 36;
-      const rawRds_3Yr = rdsInfra * 36;
-      const rawEc2El = document.getElementById('raw-ec2-total');
-      const rawRdsEl = document.getElementById('raw-rds-total');
-      if (rawEc2El) rawEc2El.textContent = `$${rawEc2_3Yr.toLocaleString()}`;
-      if (rawRdsEl) rawRdsEl.textContent = `$${rawRds_3Yr.toLocaleString()}`;
+      const ec2Hours = parseInt(ec2RuntimeInput.value, 10);
+      const rdsReqMillions = parseFloat(rdsRequestsInput.value);
+      const years = parseInt(timelineInput.value, 10);
+      const months = years * 12;
 
-      // Labor & Blended TCO
-      const ec2MonthlyLabor = ec2Hours * dbaRate;
-      const rdsMonthlyLabor = rdsHours * dbaRate;
-      const ec2Total3Yr = (ec2Infra + ec2MonthlyLabor) * 36;
-      const rdsTotal3Yr = (rdsInfra + rdsMonthlyLabor) * 36;
-
-      document.getElementById('tco-ec2-total').textContent = `$${ec2Total3Yr.toLocaleString()}`;
-      document.getElementById('tco-rds-total').textContent = `$${rdsTotal3Yr.toLocaleString()}`;
-
-      const verdictEl = document.getElementById('tco-verdict-summary');
-      if (dbaRate === 0) {
-        const rawSavings = rawRds_3Yr - rawEc2_3Yr;
-        const pct = Math.round((rawSavings / rawRds_3Yr) * 100);
-        verdictEl.innerHTML = `<span style="color:#60a5fa; font-weight:700; font-size:14px;">🏆 EC2 is ${pct}% Cheaper ($${rawSavings.toLocaleString()} Cloud Savings)</span><br><span style="font-size:11px; color:var(--text-dim);">EC2 offers constant flat-rate compute. Without external DBA labor costs, self-hosting is dramatically cheaper than managed AWS RDS.</span>`;
-      } else if (ec2Total3Yr <= rdsTotal3Yr) {
-        const diff = (rdsTotal3Yr - ec2Total3Yr).toLocaleString();
-        verdictEl.innerHTML = `<span style="color:#60a5fa; font-weight:700; font-size:14px;">🏆 EC2 is Cheaper by $${diff} over 3 years</span><br><span style="font-size:11px; color:var(--text-dim);">Lower infrastructure fees and lean labor requirements keep self-hosted EC2 more cost-effective overall.</span>`;
-      } else {
-        const diff = (ec2Total3Yr - rdsTotal3Yr).toLocaleString();
-        verdictEl.innerHTML = `<span style="color:#c084fc; font-weight:700; font-size:14px;">🏆 AWS RDS is Cheaper by $${diff} over 3 years (Labor Adjusted)</span><br><span style="font-size:11px; color:var(--text-dim);">While raw EC2 compute is cheaper, enterprise DBA salaries ($${dbaRate}/hr for OS patching & backup management) outweigh the cloud infrastructure premium.</span>`;
+      // Update Slider Labels
+      const lblEc2 = document.getElementById('lbl-ec2-hours');
+      if (lblEc2) {
+        lblEc2.textContent = ec2Hours >= 730 ? '730 hrs/mo (24/7 Full Uptime)' : `${ec2Hours} hrs/mo`;
       }
 
-      const ctx = document.getElementById('tcoChart').getContext('2d');
-      if (tcoChart) tcoChart.destroy();
-      tcoChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: ['EC2 (Self-Hosted)', 'AWS RDS (Managed)'],
-          datasets: [
-            {
-              label: 'Cloud Infrastructure ($)',
-              data: [rawEc2_3Yr, rawRds_3Yr],
-              backgroundColor: '#1e293b',
-              borderRadius: 4
-            },
-            {
-              label: 'DevOps / DBA Labor ($)',
-              data: [ec2MonthlyLabor * 36, rdsMonthlyLabor * 36],
-              backgroundColor: ['#3b82f6', '#a855f7'],
-              borderRadius: 4
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { stacked: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8', font: { weight: 600 } } },
-            y: { stacked: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } }
-          },
-          plugins: {
-            legend: { labels: { color: '#e2e8f0', font: { weight: 600 } } }
-          }
+      const lblRds = document.getElementById('lbl-rds-requests');
+      if (lblRds) {
+        lblRds.textContent = `${rdsReqMillions.toFixed(1)} Million queries/mo`;
+      }
+
+      const lblTimeline = document.getElementById('lbl-timeline');
+      if (lblTimeline) {
+        lblTimeline.textContent = `${years} Year${years > 1 ? 's' : ''} (${months} Months)`;
+      }
+
+      // Timing-Based EC2 Formula:
+      // Hourly rate: $0.0116/hr (t2.micro / t3.micro in ap-south-1) + $2.50 EBS gp3 storage
+      const ec2MonthlyCompute = ec2Hours * 0.0116;
+      const ec2MonthlyStorage = 2.50;
+      const ec2MonthlyTotal = ec2MonthlyCompute + ec2MonthlyStorage;
+      const ec2Total = Math.round(ec2MonthlyTotal * months);
+
+      // Request-Based RDS Formula:
+      // Base instance: $18.00/mo (db.t3.micro) + $2.50 per Million requests (IOPS + WAL + snapshot delta)
+      const rdsBaseMonthly = 18.00;
+      const rdsRequestMonthly = rdsReqMillions * 2.50;
+      const rdsMonthlyTotal = rdsBaseMonthly + rdsRequestMonthly;
+      const rdsTotal = Math.round(rdsMonthlyTotal * months);
+
+      // Update Card Metrics
+      const ec2TotalEl = document.getElementById('ec2-total-cost');
+      if (ec2TotalEl) ec2TotalEl.textContent = `$${ec2Total.toLocaleString()}`;
+
+      const ec2MonthlyLbl = document.getElementById('ec2-monthly-lbl');
+      if (ec2MonthlyLbl) ec2MonthlyLbl.textContent = `$${ec2MonthlyTotal.toFixed(2)} / month (Flat-Rate Timing)`;
+
+      const rdsTotalEl = document.getElementById('rds-total-cost');
+      if (rdsTotalEl) rdsTotalEl.textContent = `$${rdsTotal.toLocaleString()}`;
+
+      const rdsMonthlyLbl = document.getElementById('rds-monthly-lbl');
+      if (rdsMonthlyLbl) rdsMonthlyLbl.textContent = `$${rdsMonthlyTotal.toFixed(2)} / month (${rdsReqMillions.toFixed(1)}M queries)`;
+
+      // Verdict Summary
+      const verdictEl = document.getElementById('tco-verdict-summary');
+      if (verdictEl) {
+        if (ec2Total < rdsTotal) {
+          const diff = rdsTotal - ec2Total;
+          const pct = Math.round((diff / rdsTotal) * 100);
+          verdictEl.innerHTML = `
+            <div style="color:#60a5fa; font-weight:700; font-size:15px; margin-bottom:4px;">
+              🏆 EC2 is ${pct}% Cheaper ($${diff.toLocaleString()} Savings over ${years} Year${years > 1 ? 's' : ''})
+            </div>
+            <div style="font-size:12px; color:var(--text-dim); line-height:1.4;">
+              EC2 pricing is <strong>100% time-based</strong> ($0.0116/hr). Unlimited database queries generate <strong>$0.00</strong> in extra fees.<br>
+              In contrast, AWS RDS charges an extra <strong>$${Math.round(rdsRequestMonthly * months).toLocaleString()}</strong> purely for query request I/O and snapshot synchronization.
+            </div>
+          `;
+        } else {
+          const diff = ec2Total - rdsTotal;
+          verdictEl.innerHTML = `
+            <div style="color:#c084fc; font-weight:700; font-size:15px; margin-bottom:4px;">
+              🏆 AWS RDS is Competitive under Low Uptime
+            </div>
+            <div style="font-size:12px; color:var(--text-dim);">
+              Under minimal query traffic and low hours, costs remain closely matched.
+            </div>
+          `;
         }
-      });
+      }
+
+      // Chart Update
+      const ctx = document.getElementById('tcoChart');
+      if (ctx) {
+        if (tcoChart) tcoChart.destroy();
+        tcoChart = new Chart(ctx.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: ['EC2 (Timing-Based)', 'AWS RDS (Request-Based)'],
+            datasets: [
+              {
+                label: 'Base Instance & Uptime ($)',
+                data: [Math.round(ec2MonthlyTotal * months), Math.round(rdsBaseMonthly * months)],
+                backgroundColor: '#1e293b',
+                borderRadius: 4
+              },
+              {
+                label: 'Query Request & I/O Scaling ($)',
+                data: [0, Math.round(rdsRequestMonthly * months)],
+                backgroundColor: ['#3b82f6', '#a855f7'],
+                borderRadius: 4
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { stacked: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8', font: { weight: 600 } } },
+              y: { stacked: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } }
+            },
+            plugins: {
+              legend: { labels: { color: '#e2e8f0', font: { weight: 600 } } }
+            }
+          }
+        });
+      }
     }
 
     // ===== Feature 6: History & Reports =====
@@ -2206,16 +2253,19 @@
       doc.text('3-Year TCO Summary', 14, y);
       y += 8;
 
-      const tcoEc2 = document.getElementById('tco-ec2-total').textContent;
-      const tcoRds = document.getElementById('tco-rds-total').textContent;
-      const tcoVerdict = document.getElementById('tco-verdict-summary').textContent;
+      const ec2TotalEl = document.getElementById('ec2-total-cost');
+      const rdsTotalEl = document.getElementById('rds-total-cost');
+      const verdictSummaryEl = document.getElementById('tco-verdict-summary');
+      const tcoEc2 = ec2TotalEl ? ec2TotalEl.textContent : '$0';
+      const tcoRds = rdsTotalEl ? rdsTotalEl.textContent : '$0';
+      const tcoVerdict = verdictSummaryEl ? verdictSummaryEl.innerText.trim().split('\n')[0] : '';
 
       doc.autoTable({
         startY: y,
         head: [['Metric', 'Value']],
         body: [
-          ['EC2 3-Year TCO', tcoEc2],
-          ['RDS 3-Year TCO', tcoRds],
+          ['EC2 Total Cost (Time-Based)', tcoEc2],
+          ['RDS Total Cost (Request-Based)', tcoRds],
           ['Verdict', tcoVerdict]
         ],
         theme: 'grid',
@@ -2263,7 +2313,7 @@
     // ===== Init on Load =====
     window.addEventListener('DOMContentLoaded', () => {
       initLiveChart();
-      setCostPreset('academic');
+      setCostPreset('normal');
     });
   </script>
 
