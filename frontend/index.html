@@ -2000,18 +2000,6 @@
             <td>Storage I/O & Snapshot Scaling</td>
             <td><span class="tag-winner tag-ec2">🏆 EC2 (Zero Per-Query Markup)</span></td>
           </tr>
-          <tr>
-            <td><strong>Operational Administrative Burden</strong><br><span style="font-size:11px; color:var(--text-dim);">OS security patches, storage scaling, automated snapshots</span></td>
-            <td>Manual (8+ hrs/month)</td>
-            <td>Fully Automated (1 hr/month)</td>
-            <td><span class="tag-winner tag-rds">🏆 AWS RDS (Zero Routine Maintenance)</span></td>
-          </tr>
-          <tr>
-            <td><strong>Enterprise Total Cost of Ownership</strong><br><span style="font-size:11px; color:var(--text-dim);">Blended infra cost + DBA salary valuation</span></td>
-            <td>Infra cheap, Labor expensive</td>
-            <td>Infra premium, Labor eliminated</td>
-            <td><span class="tag-winner tag-rds">🏆 AWS RDS (Enterprise Adjusted)</span></td>
-          </tr>
         `;
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="4" style="color:var(--rose);">Scorecard retrieval error: ${err.message}</td></tr>`;
